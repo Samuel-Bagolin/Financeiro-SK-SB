@@ -1,5 +1,5 @@
 
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getDatabase, ref } from "firebase/database";
 
 const firebaseConfig = {
@@ -13,6 +13,11 @@ const firebaseConfig = {
   measurementId: "G-V93DKCMD80"
 };
 
-const app = initializeApp(firebaseConfig);
+// Singleton para garantir que o app não seja reinicializado
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// Inicializa o Realtime Database explicitamente com o app instanciado
 export const db = getDatabase(app);
-export const stateRef = ref(db, 'appState');
+
+// Atalho para a referência principal do estado no RTDB
+export const getStateRef = () => ref(db, 'appState');

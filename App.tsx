@@ -1,45 +1,61 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { onValue, set } from "firebase/database";
-import { stateRef } from './firebase.ts';
-import { YearData, MonthData, ViewState, Bill, AppState } from './types';
-import { MONTH_NAMES, INITIAL_BILLS, INITIAL_INCOME } from './constants';
+import { getStateRef } from './firebase.ts';
+import { YearData, MonthData, ViewState, Bill, AppState } from './types.ts';
+import { MONTH_NAMES, INITIAL_BILLS, INITIAL_INCOME } from './constants.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import MonthDetail from './components/MonthDetail.tsx';
 import Reports from './components/Reports.tsx';
+
+// Fallback para IDs únicos
+const generateId = () => {
+  try {
+    return crypto.randomUUID();
+  } catch (e) {
+    return Math.random().toString(36).substring(2, 15);
+  }
+};
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({ years: [], reserve: 0 });
   const [viewState, setViewState] = useState<ViewState>({ view: 'dashboard', year: 2026 });
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Sync from Firebase on mount
   useEffect(() => {
-    const unsubscribe = onValue(stateRef, (snapshot) => {
+    // Escuta mudanças no Firebase
+    const unsubscribe = onValue(getStateRef(), (snapshot) => {
       const data = snapshot.val();
-      if (data) {
+      
+      // Se data existe mas years está vazio ou ausente, inicializa
+      if (data && data.years && Array.isArray(data.years) && data.years.length > 0) {
         setState(data);
       } else {
-        // Initialize if first time
+        console.warn("Estado inicial não encontrado no banco, criando dados padrão...");
         initializeDefault();
       }
+      setLoading(false);
+    }, (error) => {
+      console.error("Erro crítico ao ler do Firebase:", error);
+      setSaveError("Erro de conexão");
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // Sync to Firebase on change
   const saveToCloud = async (newState: AppState) => {
     setIsSaving(true);
+    setSaveError(null);
     try {
-      await set(stateRef, newState);
-    } catch (e) {
-      console.error("Firebase save error:", e);
+      await set(getStateRef(), newState);
+    } catch (e: any) {
+      console.error("Erro ao salvar no Firebase:", e);
+      setSaveError("Falha na sincronização");
     } finally {
-      // Small timeout for visual feedback
-      setTimeout(() => setIsSaving(false), 500);
+      setTimeout(() => setIsSaving(false), 800);
     }
   };
 
@@ -49,7 +65,7 @@ const App: React.FC = () => {
       months: MONTH_NAMES.map((name, index) => ({
         id: index,
         name,
-        bills: INITIAL_BILLS.map(b => ({ ...b, id: crypto.randomUUID() })),
+        bills: INITIAL_BILLS.map(b => ({ ...b, id: generateId() })),
         income: { ...INITIAL_INCOME }
       }))
     };
@@ -59,6 +75,7 @@ const App: React.FC = () => {
   };
 
   const currentYearData = useMemo(() => {
+    if (state.years.length === 0) return null;
     return state.years.find(y => y.year === viewState.year) || state.years[0];
   }, [state.years, viewState.year]);
 
@@ -70,11 +87,11 @@ const App: React.FC = () => {
       year: newYearNumber,
       months: lastYear ? lastYear.months.map(m => ({
         ...m,
-        bills: m.bills.map(b => ({ ...b, paid: false, id: crypto.randomUUID() }))
+        bills: m.bills.map(b => ({ ...b, paid: false, id: generateId() }))
       })) : MONTH_NAMES.map((name, index) => ({
         id: index,
         name,
-        bills: INITIAL_BILLS.map(b => ({ ...b, id: crypto.randomUUID() })),
+        bills: INITIAL_BILLS.map(b => ({ ...b, id: generateId() })),
         income: { ...INITIAL_INCOME }
       }))
     };
@@ -131,7 +148,7 @@ const App: React.FC = () => {
             if (m.id === monthId || (replicate && m.id > monthId)) {
               return {
                 ...m,
-                bills: [...m.bills, { ...bill, id: crypto.randomUUID() }]
+                bills: [...m.bills, { ...bill, id: generateId() }]
               };
             }
             return m;
@@ -153,24 +170,28 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center">
         <div className="loader mb-4"></div>
-        <p className="text-zinc-500 font-medium animate-pulse">Sincronizando dados...</p>
+        <p className="text-zinc-500 font-medium animate-pulse">Estabelecendo conexão segura...</p>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 pb-10">
-      {/* Cloud Sync Status Indicator */}
-      <div className="fixed top-2 right-4 z-[100] flex items-center gap-2 pointer-events-none transition-opacity duration-300">
+      <div className="fixed top-2 right-4 z-[100] flex flex-col items-end gap-1 pointer-events-none">
         {isSaving ? (
           <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full backdrop-blur-md">
             <div className="loader !w-3 !h-3"></div>
-            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Nuvem</span>
+            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Sincronizando</span>
+          </div>
+        ) : saveError ? (
+          <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-full backdrop-blur-md">
+            <div className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></div>
+            <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">{saveError}</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 bg-zinc-900/50 px-3 py-1.5 rounded-full border border-zinc-800 backdrop-blur-md opacity-50">
             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Sincro</span>
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Nuvem Conectada</span>
           </div>
         )}
       </div>
