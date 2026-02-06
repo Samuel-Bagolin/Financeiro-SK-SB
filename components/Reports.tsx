@@ -9,7 +9,7 @@ interface ReportsProps {
 }
 
 const Reports: React.FC<ReportsProps> = ({ allYears, reserve, onBack }) => {
-  const currentYear = allYears[allYears.length - 1];
+  const currentYear = allYears.length > 0 ? allYears[allYears.length - 1] : { year: 2026 };
   
   const annualStats = allYears.map(y => {
     let totalIncome = 0;
@@ -36,6 +36,8 @@ const Reports: React.FC<ReportsProps> = ({ allYears, reserve, onBack }) => {
     };
   });
 
+  const latestStat = annualStats.length > 0 ? annualStats[annualStats.length - 1] : { net: 0, year: 2026, totalIncome: 0, totalExpenses: 0, avgMonthlyNet: 0 };
+
   return (
     <div className="max-w-4xl mx-auto px-4 pt-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
       <header className="flex items-center gap-4 mb-8">
@@ -53,7 +55,6 @@ const Reports: React.FC<ReportsProps> = ({ allYears, reserve, onBack }) => {
         </div>
       </header>
 
-      {/* Global Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
         <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-3xl">
           <span className="text-xs font-bold text-emerald-500 uppercase tracking-widest block mb-2">Saldo em Reserva</span>
@@ -64,18 +65,22 @@ const Reports: React.FC<ReportsProps> = ({ allYears, reserve, onBack }) => {
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
-          <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">Performance {currentYear.year}</span>
+          <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest block mb-2">Performance {latestStat.year}</span>
           <div className="flex items-baseline gap-2">
-            <span className={`text-3xl font-black ${annualStats[annualStats.length - 1].net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              R$ {Math.abs(annualStats[annualStats.length - 1].net).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            <span className={`text-3xl font-black ${latestStat.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              R$ {Math.abs(latestStat.net).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
-            <span className="text-xs text-zinc-500 font-medium">{annualStats[annualStats.length - 1].net >= 0 ? 'Superavit' : 'Deficit'}</span>
+            <span className="text-xs text-zinc-500 font-medium">{latestStat.net >= 0 ? 'Superavit' : 'Deficit'}</span>
           </div>
         </div>
       </div>
 
-      {/* Yearly Tables */}
       <div className="space-y-10">
+        {annualStats.length === 0 && (
+          <div className="text-center py-20 text-zinc-600 border-2 border-dashed border-zinc-800 rounded-3xl">
+            Sem dados anuais para exibir.
+          </div>
+        )}
         {annualStats.slice().reverse().map(stat => (
           <div key={stat.year} className="overflow-hidden bg-zinc-900/40 border border-zinc-800 rounded-3xl p-6">
             <h3 className="text-lg font-black mb-6 flex items-center gap-2">
@@ -100,7 +105,6 @@ const Reports: React.FC<ReportsProps> = ({ allYears, reserve, onBack }) => {
               </div>
             </div>
 
-            {/* Visual Bar */}
             <div className="mt-8">
               <div className="flex justify-between text-[10px] font-black uppercase text-zinc-600 mb-2 px-1">
                 <span>Gasto</span>
@@ -109,14 +113,13 @@ const Reports: React.FC<ReportsProps> = ({ allYears, reserve, onBack }) => {
               <div className="h-4 w-full bg-zinc-950 rounded-full flex overflow-hidden border border-zinc-800">
                 <div 
                   className="h-full bg-rose-500/80 transition-all duration-1000" 
-                  style={{ width: `${(stat.totalExpenses / (stat.totalIncome + stat.totalExpenses)) * 100}%` }}
+                  style={{ width: `${stat.totalIncome + stat.totalExpenses === 0 ? 0 : (stat.totalExpenses / (stat.totalIncome + stat.totalExpenses)) * 100}%` }}
                 />
                 <div 
                   className="h-full bg-emerald-500/80 transition-all duration-1000" 
-                  style={{ width: `${(stat.totalIncome / (stat.totalIncome + stat.totalExpenses)) * 100}%` }}
+                  style={{ width: `${stat.totalIncome + stat.totalExpenses === 0 ? 0 : (stat.totalIncome / (stat.totalIncome + stat.totalExpenses)) * 100}%` }}
                 />
               </div>
-              <p className="text-[10px] text-zinc-500 mt-2 text-center italic">A barra mostra a proporção entre o que entra e o que sai do seu caixa.</p>
             </div>
           </div>
         ))}

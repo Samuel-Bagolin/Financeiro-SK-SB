@@ -2,28 +2,28 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { YearData, MonthData, ViewState, Bill, AppState } from './types';
 import { MONTH_NAMES, INITIAL_BILLS, INITIAL_INCOME } from './constants';
-import Dashboard from './components/Dashboard';
-import MonthDetail from './components/MonthDetail';
-import Reports from './components/Reports';
+import Dashboard from './components/Dashboard.tsx';
+import MonthDetail from './components/MonthDetail.tsx';
+import Reports from './components/Reports.tsx';
 
-const STORAGE_KEY = 'financeiro_sk_sb_v2_data';
+const STORAGE_KEY = 'financeiro_sk_sb_v3_data';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({ years: [], reserve: 0 });
   const [viewState, setViewState] = useState<ViewState>({ view: 'dashboard', year: 2026 });
   const [loading, setLoading] = useState(true);
 
-  // Persistence
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // Migration from old version if needed
           setState({ years: parsed, reserve: 0 });
-        } else {
+        } else if (parsed && parsed.years) {
           setState(parsed);
+        } else {
+          initializeDefault();
         }
       } catch (e) {
         console.error("Error parsing storage data", e);
@@ -36,7 +36,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && state.years.length > 0) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
   }, [state, loading]);
@@ -47,7 +47,7 @@ const App: React.FC = () => {
       months: MONTH_NAMES.map((name, index) => ({
         id: index,
         name,
-        bills: INITIAL_BILLS.map(b => ({ ...b, id: `${Date.now()}-${Math.random()}` })),
+        bills: INITIAL_BILLS.map(b => ({ ...b, id: crypto.randomUUID() })),
         income: { ...INITIAL_INCOME }
       }))
     };
@@ -55,18 +55,23 @@ const App: React.FC = () => {
   };
 
   const currentYearData = useMemo(() => {
-    return state.years.find(y => y.year === viewState.year);
+    return state.years.find(y => y.year === viewState.year) || state.years[0];
   }, [state.years, viewState.year]);
 
   const handleCreateNewYear = () => {
     const lastYear = state.years[state.years.length - 1];
-    const newYearNumber = lastYear.year + 1;
+    const newYearNumber = (lastYear?.year || 2026) + 1;
     
     const newYear: YearData = {
       year: newYearNumber,
-      months: lastYear.months.map(m => ({
+      months: lastYear ? lastYear.months.map(m => ({
         ...m,
-        bills: m.bills.map(b => ({ ...b, paid: false, id: `${Date.now()}-${Math.random()}` }))
+        bills: m.bills.map(b => ({ ...b, paid: false, id: crypto.randomUUID() }))
+      })) : MONTH_NAMES.map((name, index) => ({
+        id: index,
+        name,
+        bills: INITIAL_BILLS.map(b => ({ ...b, id: crypto.randomUUID() })),
+        income: { ...INITIAL_INCOME }
       }))
     };
 
@@ -116,7 +121,7 @@ const App: React.FC = () => {
             if (m.id === monthId || (replicate && m.id > monthId)) {
               return {
                 ...m,
-                bills: [...m.bills, { ...bill, id: `${Date.now()}-${Math.random()}` }]
+                bills: [...m.bills, { ...bill, id: crypto.randomUUID() }]
               };
             }
             return m;
